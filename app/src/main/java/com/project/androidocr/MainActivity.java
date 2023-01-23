@@ -34,22 +34,35 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.NetworkResponse;
+import com.android.volley.Request;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.Volley;
 import com.google.android.gms.vision.Frame;
 import com.google.android.gms.vision.text.TextBlock;
 import com.google.android.gms.vision.text.TextRecognizer;
 import com.theartofdev.edmodo.cropper.CropImage;
 import com.theartofdev.edmodo.cropper.CropImageView;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.Buffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
@@ -58,6 +71,15 @@ public class MainActivity extends AppCompatActivity {
     private ImageView mPreviewIv;
     private Button mCTA;
     private ScrollView resultTxtScrollView;
+
+    // Request Photo Sending
+    private static final String ROOT_URL = "http://45.237.69.21:8000/gravaImagemApp";
+    private static final int REQUEST_PERMISSIONS = 100;
+    private static final int PICK_IMAGE_REQUEST =1 ;
+    private Bitmap bitmap;
+    private String filePath;
+    ImageView imageView;
+    TextView textView;
 
     //Permission Code
     private static final int CAMERA_REQUEST_CODE = 200;
@@ -180,10 +202,16 @@ public class MainActivity extends AppCompatActivity {
 
             CropImage.ActivityResult result = CropImage.getActivityResult(data);
             if (resultCode == RESULT_OK) {
-                Uri resultUri = result.getUri(); //get image uri
+                Uri resultUri = result.getUri();
                 Log.d("TAG_resultUri", String.valueOf(resultUri));
-//                String resString64Img = convertUriToString64(resultUri);
-//                Log.d("TAG_resStrifd", resString64Img);
+
+                Bitmap urlBitmap = null;
+                try {
+                    urlBitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), resultUri);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                uploadBitmap(urlBitmap);
 
                 //set image to image view
                 mPreviewIv.setImageURI(resultUri);
@@ -219,9 +247,56 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void uploadBitmap(final Bitmap bitmap) {
+
+        VolleyMultipartRequest volleyMultipartRequest = new VolleyMultipartRequest(Request.Method.POST, ROOT_URL,
+                response -> {
+                    Log.d("TAG_responsedata", Arrays.toString(response.data));
+//                        JSONObject obj = new JSONObject(new String(response.data));
+//                        Toast.makeText(getApplicationContext(), obj.getString("message"), Toast.LENGTH_SHORT).show();
+                },
+                error -> {
+                    Toast.makeText(getApplicationContext(), error.getMessage(), Toast.LENGTH_LONG).show();
+                    Log.e("GotError",""+error.getMessage());
+                }) {
+
+            @Override
+            protected Map<String, String> getParams() {
+                Map<String, String> params = new HashMap<>();
+                params.put("id_usuario", "9080-1-1");
+                return params;
+            }
+
+            @Override
+            protected Map<String, DataPart> getByteData() {
+                Map<String, DataPart> params = new HashMap<>();
+                long imagename = System.currentTimeMillis();
+                params.put("imagem", new DataPart(imagename + ".jpg", getFileDataFromDrawable(bitmap)));
+                return params;
+            }
+
+            public byte[] getFileDataFromDrawable(Bitmap bitmap) {
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, byteArrayOutputStream);
+                return byteArrayOutputStream.toByteArray();
+            }
+        };
+
+        //adding the request to volley
+        Volley.newRequestQueue(this).add(volleyMultipartRequest);
+    }
+
+
+
     // HELPERS
 
-    // ref: https://stackoverflow.com/questions/39807480/how-to-convert-uri-image-into-base64
+    public static String getRandomString() {
+        return UUID.randomUUID().toString();
+    }
+}
+
+/* ARCHIVES
+// ref: https://stackoverflow.com/questions/39807480/how-to-convert-uri-image-into-base64
     public String convertUriToString64(Uri imageUri) {
         InputStream imageStream = null;
         try {
@@ -234,13 +309,9 @@ public class MainActivity extends AppCompatActivity {
         final Bitmap selectedImage = BitmapFactory.decodeStream(imageStream);
 
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        selectedImage.compress(Bitmap.CompressFormat.PNG, 60, byteArrayOutputStream);
+        selectedImage.compress(Bitmap.CompressFormat.JPEG, 60, byteArrayOutputStream);
         byte[] byteArray = byteArrayOutputStream.toByteArray();
 
-        return Base64.encodeToString(byteArray, Base64.NO_WRAP); // encodeImage(selectedImage);
+        return Base64.encodeToString(byteArray, Base64.DEFAULT); // encodeImage(selectedImage);
     }
-
-    public static String getRandomString() {
-        return UUID.randomUUID().toString();
-    }
-}
+ */
